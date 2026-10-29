@@ -110,7 +110,7 @@ source .venv/bin/activate
 python -m pip install -e . -r requirements-dev.txt
 python -m build
 python -m twine check --strict dist/*
-python -m pytest tests guardrail_core
+python -m pytest tests
 python -m ruff check --output-format=github .
 python -m ruff format --check .
 ```
