@@ -38,6 +38,9 @@ CI tests the installed wheel outside the source tree in a fresh environment on
 Python 3.12 through 3.14. The distribution name is `kaito-guardrail-core`;
 Python imports use `guardrail_core`.
 
+The tokenizer dependency uses `tiktoken` 0.12.0, which provides Python 3.14 wheels.
+The older 0.11.0 release cannot build its PyO3 extension on Python 3.14.
+
 ## Streaming window
 
 `guardrail_core.streaming.window` retains output tails to detect cross-chunk
