@@ -23,9 +23,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kaito-project/kaito-guardrial-core"
-Source = "https://github.com/kaito-project/kaito-guardrial-core"
-Issues = "https://github.com/kaito-project/kaito-guardrial-core/issues"
+Homepage = "https://github.com/kaito-project/kaito-guardrail-core"
+Source = "https://github.com/kaito-project/kaito-guardrail-core"
+Issues = "https://github.com/kaito-project/kaito-guardrail-core/issues"
 
 [tool.setuptools]
 include-package-data = false

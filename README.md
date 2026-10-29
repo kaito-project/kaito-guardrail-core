@@ -197,7 +197,7 @@ Confirm maintainer access and configure:
 
 - A project or pending publisher on both TestPyPI and PyPI for `kaito-guardrail-core`.
 - A GitHub Trusted Publisher on each index: owner `kaito-project`, repository
-  `kaito-guardrial-core`, workflow filename `release-guardrail-core.yaml`, and the corresponding
+  `kaito-guardrail-core`, workflow filename `release-guardrail-core.yaml`, and the corresponding
   GitHub environment below. Publishing uses GitHub OIDC, not an API token.
 - GitHub environments `guardrail-core-testpypi` and `guardrail-core-pypi`, restricted
   to `main`. Require maintainer approval for `guardrail-core-pypi` before enabling
