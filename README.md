@@ -8,12 +8,93 @@ chunks; they do not scan or enforce policy.
 `guardrail_core.streaming.window` provides a policy-independent text window for
 scan-before-release buffering.
 
+## Scanner configuration (0.2.0)
+
+`guardrail_core.config` exposes scanner schemas, along with
+`parse_scanner_config()` and `build_scanner()`. Applications
+own policy loading and failure handling; they must not recreate a scanner registry.
+
+The following example configures all eight supported scanner types:
+
+```python
+from guardrail_core.config import build_scanner, parse_scanner_config
+
+scanner_configs = [
+    {
+        "type": "ban_substrings",
+        "substrings": ["secret"],
+        "match_type": "word",
+        "case_sensitive": False,
+        "contains_all": False,
+        "action": "redact",
+    },
+    {"type": "invisible_text", "action": "redact"},
+    {
+        "type": "regex",
+        "patterns": [r"\bINTERNAL-\d+\b"],
+        "is_blocked": True,
+        "match_type": "search",
+        "action": "block",
+    },
+    {
+        "type": "json",
+        "required_elements": 1,
+        "repair": True,
+        "action": "redact",
+    },
+    {
+        "type": "reading_time",
+        "max_time": 2.0,
+        "truncate": True,
+        "action": "redact",
+    },
+    {
+        "type": "token_limit",
+        "limit": 4096,
+        "encoding_name": "cl100k_base",
+        "action": "block",
+    },
+    {"type": "secrets", "redact_mode": "all", "action": "redact"},
+    {
+        "type": "sensitive",
+        "detectors": ["email", "phone", "credit_card", "ip_address"],
+        "action": "redact",
+    },
+]
+scanners = [build_scanner(parse_scanner_config(raw)) for raw in scanner_configs]
+
+result = scanners[0].scan("", "a secret")
+assert result.output == "a [REDACTED]"
+```
+
+These are independent configuration examples, not a recommended scanner chain:
+choose scanners appropriate to the content (for example, `json` expects JSON).
+
+Entries use a flattened mapping with `type`, optional `action` (`block` or
+`redact`), and scanner-specific fields. The default action is `block`. Type and
+field names accept snake_case, camelCase, and hyphenated spelling. Scanner order
+and policy-level actions remain the caller's responsibility.
+
+The strict parser rejects unknown scanners, unknown or duplicate normalized
+fields, invalid actions, and malformed scanner settings with `ValueError`.
+It does not log and skip invalid entries. Construction exceptions from
+`build_scanner()` propagate unchanged. The schema classes retain their existing
+`from_dict()` and `build()` methods.
+
+Configuration and construction stay in `guardrail_core.config`; sensitive-data
+detection and redaction live in an internal scanner module. Consumers continue
+to use the same configuration APIs.
+
+The 0.2.0 source and wheel can be tested before publishing; the version bump is
+not a release.
+
 ## Installation and development
 
 This repository starts from
 [`kaito-project/kaito` main at `74d6eeeefe314e91f5c636de10c5b5c21cb21b64`](https://github.com/kaito-project/kaito/tree/74d6eeeefe314e91f5c636de10c5b5c21cb21b64/guardrail_core).
 The original source remains in KAITO during the transition. The distribution
-name, import paths, and version are unchanged; this migration is not a release.
+name and import paths are unchanged. Version 0.2.0 prepares the shared scanner
+configuration APIs; no package is published by this change.
 
 Install the published package:
 

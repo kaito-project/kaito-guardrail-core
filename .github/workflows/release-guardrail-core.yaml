@@ -108,6 +108,8 @@ jobs:
           guardrail-core-venv/bin/python -m pip install pytest==9.1.1 ./guardrail-core-dist/*.whl
           mkdir -p guardrail-core-tests/secrets
           cp -R "$GITHUB_WORKSPACE/tests/streaming" guardrail-core-tests/streaming
+          cp "$GITHUB_WORKSPACE/tests/test_config.py" \
+            "$GITHUB_WORKSPACE/tests/test_sensitive_scanner.py" guardrail-core-tests/
           cp "$GITHUB_WORKSPACE/guardrail_core"/test_*.py guardrail-core-tests/
           cp "$GITHUB_WORKSPACE/guardrail_core/secrets/test_scanner.py" guardrail-core-tests/secrets/
           guardrail-core-venv/bin/python -I -m pytest guardrail-core-tests -q
@@ -196,6 +198,7 @@ jobs:
           from importlib.metadata import version
 
           from guardrail_core.native_scanners import NativeBanSubstringsScanner
+          from guardrail_core.config import build_scanner, parse_scanner_config
           from guardrail_core.secrets import NativeSecretsScanner
           from guardrail_core.streaming.openai import (
               OpenAIChatChunkParseStatus,
@@ -208,6 +211,10 @@ jobs:
           assert parse_openai_chat_sse_event(event).status == OpenAIChatChunkParseStatus.DONE
           assert not NativeBanSubstringsScanner(["blocked"]).scan("", "blocked").valid
           assert NativeSecretsScanner().scan("", "ordinary text").valid
+          config = parse_scanner_config(
+              {"type": "ban_substrings", "substrings": ["blocked"], "action": "redact"}
+          )
+          assert build_scanner(config).scan("", "blocked").output == "[REDACTED]"
           PY
           smoke-venv/bin/python -m pip check
 
