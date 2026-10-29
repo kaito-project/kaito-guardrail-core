@@ -10,26 +10,70 @@ scan-before-release buffering.
 
 ## Scanner configuration (0.2.0)
 
-`guardrail_core.config` exposes the scanner schemas previously available only in
-RAGEngine, along with `parse_scanner_config()` and `build_scanner()`. Applications
+`guardrail_core.config` exposes scanner schemas, along with
+`parse_scanner_config()` and `build_scanner()`. Applications
 own policy loading and failure handling; they must not recreate a scanner registry.
+
+The following example configures all eight supported scanner types:
 
 ```python
 from guardrail_core.config import build_scanner, parse_scanner_config
 
-config = parse_scanner_config(
-    {"type": "ban_substrings", "substrings": ["secret"], "action": "redact"}
-)
-scanner = build_scanner(config)
-result = scanner.scan("", "a secret")
+scanner_configs = [
+    {
+        "type": "ban_substrings",
+        "substrings": ["secret"],
+        "match_type": "word",
+        "case_sensitive": False,
+        "contains_all": False,
+        "action": "redact",
+    },
+    {"type": "invisible_text", "action": "redact"},
+    {
+        "type": "regex",
+        "patterns": [r"\bINTERNAL-\d+\b"],
+        "is_blocked": True,
+        "match_type": "search",
+        "action": "block",
+    },
+    {
+        "type": "json",
+        "required_elements": 1,
+        "repair": True,
+        "action": "redact",
+    },
+    {
+        "type": "reading_time",
+        "max_time": 2.0,
+        "truncate": True,
+        "action": "redact",
+    },
+    {
+        "type": "token_limit",
+        "limit": 4096,
+        "encoding_name": "cl100k_base",
+        "action": "block",
+    },
+    {"type": "secrets", "redact_mode": "all", "action": "redact"},
+    {
+        "type": "sensitive",
+        "detectors": ["email", "phone", "credit_card", "ip_address"],
+        "action": "redact",
+    },
+]
+scanners = [build_scanner(parse_scanner_config(raw)) for raw in scanner_configs]
+
+result = scanners[0].scan("", "a secret")
 assert result.output == "a [REDACTED]"
 ```
 
+These are independent configuration examples, not a recommended scanner chain:
+choose scanners appropriate to the content (for example, `json` expects JSON).
+
 Entries use a flattened mapping with `type`, optional `action` (`block` or
 `redact`), and scanner-specific fields. The default action is `block`. Type and
-field names accept snake_case, camelCase, and hyphenated spelling, matching
-RAGEngine's policy convention. Scanner order and policy-level actions remain the
-caller's responsibility.
+field names accept snake_case, camelCase, and hyphenated spelling. Scanner order
+and policy-level actions remain the caller's responsibility.
 
 The strict parser rejects unknown scanners, unknown or duplicate normalized
 fields, invalid actions, and malformed scanner settings with `ValueError`.
@@ -41,10 +85,8 @@ Configuration and construction stay in `guardrail_core.config`; sensitive-data
 detection and redaction live in an internal scanner module. Consumers continue
 to use the same configuration APIs.
 
-RAGEngine remains pinned to the published 0.1.1 package and retains its existing
-schemas until 0.2.0 is released. Migrating its imports is a subsequent change;
-this avoids making RAGEngine depend on an unpublished package. The 0.2.0 source
-and wheel can be tested before publishing; the version bump is not a release.
+The 0.2.0 source and wheel can be tested before publishing; the version bump is
+not a release.
 
 ## Installation and development
 
