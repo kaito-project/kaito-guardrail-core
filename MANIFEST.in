@@ -1,0 +1,3 @@
+include requirements-dev.txt
+recursive-include tests *.py
+recursive-include guardrail_core test_*.py
