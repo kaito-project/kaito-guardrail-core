@@ -108,10 +108,9 @@ jobs:
           guardrail-core-venv/bin/python -m pip install pytest==9.1.1 ./guardrail-core-dist/*.whl
           mkdir -p guardrail-core-tests/secrets
           cp -R "$GITHUB_WORKSPACE/tests/streaming" guardrail-core-tests/streaming
-          cp "$GITHUB_WORKSPACE/tests/test_config.py" \
-            "$GITHUB_WORKSPACE/tests/test_sensitive_scanner.py" guardrail-core-tests/
-          cp "$GITHUB_WORKSPACE/guardrail_core"/test_*.py guardrail-core-tests/
-          cp "$GITHUB_WORKSPACE/guardrail_core/secrets/test_scanner.py" guardrail-core-tests/secrets/
+          cp "$GITHUB_WORKSPACE/tests"/test_*.py guardrail-core-tests/
+          rm guardrail-core-tests/test_distribution.py
+          cp "$GITHUB_WORKSPACE/tests/secrets/test_scanner.py" guardrail-core-tests/secrets/
           guardrail-core-venv/bin/python -I -m pytest guardrail-core-tests -q
           guardrail-core-venv/bin/python -m pip check
 

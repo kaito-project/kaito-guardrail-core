@@ -12,17 +12,5 @@
 # limitations under the License.
 
 from setuptools import setup
-from setuptools.command.build_py import build_py
 
-
-class BuildPy(build_py):
-    def find_package_modules(self, package, package_dir):
-        # Scanner tests currently live alongside the implementation.
-        return [
-            entry
-            for entry in super().find_package_modules(package, package_dir)
-            if not entry[1].startswith("test_")
-        ]
-
-
-setup(cmdclass={"build_py": BuildPy})
+setup()
