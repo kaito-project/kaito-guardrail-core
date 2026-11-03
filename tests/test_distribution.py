@@ -83,6 +83,7 @@ def test_wheel_metadata_and_contents(distributions):
         assert "guardrail_core/streaming/sse.py" in names
         assert "guardrail_core/streaming/openai.py" in names
         assert "guardrail_core/streaming/window.py" in names
+        assert "guardrail_core/streaming/scanners.py" in names
         assert "guardrail_core/native_scanners.py" in names
         assert "guardrail_core/config.py" in names
         assert "guardrail_core/_sensitive_scanner.py" in names
@@ -118,7 +119,9 @@ def test_sdist_contains_build_inputs_and_tests(distributions):
         "tests/test_scanning.py",
         "tests/streaming/test_sse.py",
         "tests/streaming/test_window.py",
+        "tests/streaming/test_scanners.py",
         "guardrail_core/streaming/window.py",
+        "guardrail_core/streaming/scanners.py",
         "guardrail_core/config.py",
         "guardrail_core/_sensitive_scanner.py",
         "tests/test_sensitive_scanner.py",

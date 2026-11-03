@@ -88,6 +88,53 @@ to use the same configuration APIs.
 The 0.2.0 source and wheel can be tested before publishing; the version bump is
 not a release.
 
+## Configured streaming scanners (0.3.0, not yet released)
+
+`guardrail_core.streaming.scanners.ScannerWindowAdapter` connects configured
+real scanners to `StreamingBufferWindow`. It uses `build_scanner()` and
+`scan_output()`, preserving scanner order, prompt forwarding, and per-scanner
+`block`/`redact` actions (including repeated scanner types). A finding blocks
+before release for `block`; `redact` forwards sanitized output to the next
+scanner. Sanitized retained tails must be stable under repeated scans; a finding
+without a replacement or an unstable replacement raises `StreamingPolicyError`
+rather than releasing unsafe text. Construction errors propagate unchanged;
+scan errors are wrapped by the window in `WindowScanError`.
+
+```python
+from guardrail_core.config import parse_scanner_config
+from guardrail_core.streaming.scanners import ScannerWindowAdapter
+from guardrail_core.streaming.window import StreamingBufferWindow
+
+scanner = ScannerWindowAdapter([
+    parse_scanner_config({
+        "type": "ban_substrings",
+        "substrings": ["secret"],
+        "match_type": "str",
+        "action": "redact",
+    }),
+])
+window = StreamingBufferWindow(scanner, holdback_len=scanner.holdback_len)
+```
+
+Finite-window support is deliberately limited to `ban_substrings` with
+`match_type="str"` and `contains_all=False`, and `invisible_text`.
+Whitespace-only substrings are rejected because the shared execution API skips
+whitespace-only buffers. Non-ASCII substrings require `case_sensitive=True`:
+Unicode lowercasing can depend on context outside a finite retained tail.
+Word boundaries, arbitrary regexes, allow-lists, JSON, cumulative token/reading
+limits, secrets, and sensitive-data detection require richer shared streaming
+contracts; they are rejected with an indexed `StreamingPolicyError`, never
+silently skipped or treated as independently scanned deltas. Buffered APIs still
+support all eight scanner types.
+
+The adapter derives a conservative minimum holdback from the longest configured
+substring (after lowercasing for case-insensitive matching), minus one Unicode
+code point. An explicit smaller holdback is rejected. Character-local invisible
+text scanning requires no holdback. Always use the adapter's `holdback_len` for
+the window, release only returned chunks, and flush only at validated normal EOF.
+The adapter owns no SSE framing, request lifecycle, refusal response, or fail-open
+policy. The 0.3.0 version bump prepares these APIs; it does not publish a release.
+
 ## Installation and development
 
 This repository starts from
