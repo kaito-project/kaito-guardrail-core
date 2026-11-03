@@ -88,7 +88,7 @@ to use the same configuration APIs.
 The 0.2.0 source and wheel can be tested before publishing; the version bump is
 not a release.
 
-## Configured streaming scanners (0.3.0, not yet released)
+## Configured streaming scanners (0.2.1, not yet released)
 
 `guardrail_core.streaming.scanners.ScannerWindowAdapter` connects configured
 real scanners to `StreamingBufferWindow`. It uses `build_scanner()` and
@@ -127,21 +127,29 @@ contracts; they are rejected with an indexed `StreamingPolicyError`, never
 silently skipped or treated as independently scanned deltas. Buffered APIs still
 support all eight scanner types.
 
+This is a limited adapter, not an extraction of RAGEngine's existing streaming
+safety logic or complete shared safety semantics for phase 2.3. Its `scan()`
+accepts `flush` and `preceding_char` for window protocol compatibility but does
+not use them; word-boundary handling and end-of-stream Secrets rechecks are not
+implemented.
+
 The adapter derives a conservative minimum holdback from the longest configured
 substring (after lowercasing for case-insensitive matching), minus one Unicode
 code point. An explicit smaller holdback is rejected. Character-local invisible
 text scanning requires no holdback. Always use the adapter's `holdback_len` for
 the window, release only returned chunks, and flush only at validated normal EOF.
 The adapter owns no SSE framing, request lifecycle, refusal response, or fail-open
-policy. The 0.3.0 version bump prepares these APIs; it does not publish a release.
+policy. The 0.2.1 version bump prepares these APIs; it does not publish a release.
 
 ## Installation and development
 
 This repository starts from
 [`kaito-project/kaito` main at `74d6eeeefe314e91f5c636de10c5b5c21cb21b64`](https://github.com/kaito-project/kaito/tree/74d6eeeefe314e91f5c636de10c5b5c21cb21b64/guardrail_core).
 The original source remains in KAITO during the transition. The distribution
-name and import paths are unchanged. Version 0.2.0 prepares the shared scanner
-configuration APIs; no package is published by this change.
+name and import paths are unchanged. Version 0.2.0 introduced the shared scanner
+configuration APIs; 0.2.1 adds the limited streaming adapter. No package is
+published by this change. After merge and publication of 0.2.1, production-stack
+should pin `kaito-guardrail-core==0.2.1`.
 
 Install the published package:
 
