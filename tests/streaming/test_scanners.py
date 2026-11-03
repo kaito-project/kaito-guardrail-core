@@ -47,14 +47,14 @@ def ban(action="block", substring="secret"):
 @pytest.mark.parametrize("split", range(1, len("secret")))
 def test_real_substring_scanner_across_chunks(action, split):
     scanner = adapter(ban(action))
-    assert scanner.holdback_len == 5
+    assert scanner.holdback_len == 256
     window = StreamingBufferWindow(scanner, holdback_len=scanner.holdback_len)
     first = window.feed("safe " + "secret"[:split])
     second = window.feed("secret"[split:] + " end")
     final = window.flush()
     if action == "block":
-        assert second == WindowEmitResult(chunks=(), blocked=True)
-        assert final.blocked
+        assert second == WindowEmitResult(chunks=())
+        assert final == WindowEmitResult(chunks=(), blocked=True)
         assert "safe ".startswith("".join(first.chunks))
     else:
         direct = build_scanner(parse_scanner_config(ban(action))).scan(
@@ -86,7 +86,7 @@ def test_unicode_holdback_and_matches(action, substring, text):
 @pytest.mark.parametrize("action", ["block", "redact"])
 def test_real_invisible_text_scanner(action):
     scanner = adapter({"type": "invisible_text", "action": action})
-    assert scanner.holdback_len == 0
+    assert scanner.holdback_len == 256
     result = scanner.scan("hello\u200bworld")
     assert result == (
         WindowScanResult(blocked=True)
@@ -111,16 +111,11 @@ def test_duplicate_scanner_types_keep_per_scanner_actions():
 @pytest.mark.parametrize(
     "config",
     [
-        {"type": "ban_substrings", "substrings": ["secret"]},
         {**ban(), "contains_all": True},
-        ban(substring=" "),
-        ban(substring="\u03c2"),
         {"type": "regex", "patterns": ["secret"]},
         {"type": "json"},
         {"type": "reading_time", "max_time": 1},
         {"type": "token_limit", "limit": 10},
-        {"type": "secrets"},
-        {"type": "sensitive", "detectors": ["email"]},
     ],
 )
 def test_unsupported_streaming_config_is_rejected_before_construction(
@@ -133,9 +128,9 @@ def test_unsupported_streaming_config_is_rejected_before_construction(
     builder.assert_not_called()
 
 
-@pytest.mark.parametrize("holdback", [-1, 0, 4])
+@pytest.mark.parametrize("holdback", [-1, 0, 4, 255])
 def test_insufficient_holdback_is_rejected(holdback):
-    with pytest.raises(StreamingPolicyError, match="at least 5"):
+    with pytest.raises(StreamingPolicyError, match="at least 256"):
         adapter(ban(), holdback_len=holdback)
 
 
@@ -158,12 +153,6 @@ def test_allow_and_empty_redaction_results():
     assert scanner.scan("\u200b") == WindowScanResult(sanitized_text="")
 
 
-def test_non_idempotent_redaction_is_rejected():
-    scanner = adapter(ban("redact", "REDACTED"))
-    with pytest.raises(StreamingPolicyError, match="not stable"):
-        scanner.scan("REDACTED")
-
-
 def test_case_sensitive_matching_is_preserved():
     scanner = adapter({**ban(), "case_sensitive": True})
     assert scanner.scan("SECRET") == WindowScanResult()
@@ -175,8 +164,7 @@ def test_invalid_redaction_without_changes_is_rejected(monkeypatch):
     real.scan.return_value = ScanResult("secret", False, 1.0)
     monkeypatch.setattr(scanner_module, "build_scanner", Mock(return_value=real))
     scanner = adapter(ban("redact"))
-    with pytest.raises(StreamingPolicyError, match="without sanitizing"):
-        scanner.scan("secret")
+    assert scanner.scan("secret") == WindowScanResult(blocked=True)
 
 
 @pytest.mark.parametrize("cancelled", [False, True])
@@ -185,11 +173,11 @@ def test_real_scanner_exceptions_and_prompt_are_preserved(monkeypatch, cancelled
     real = Mock()
     real.scan.side_effect = cause
     monkeypatch.setattr(scanner_module, "build_scanner", Mock(return_value=real))
-    scanner = adapter(ban(), prompt="request prompt", holdback_len=5)
+    scanner = adapter(ban(), prompt="request prompt", holdback_len=256)
     window = StreamingBufferWindow(scanner, holdback_len=scanner.holdback_len)
     with pytest.raises(asyncio.CancelledError if cancelled else WindowScanError) as exc:
-        window.feed("secret")
-    real.scan.assert_called_once_with("request prompt", "secret")
+        window.feed("secret" + " " * 256)
+    real.scan.assert_called_once_with("request prompt", "secret" + " " * 256)
     if not cancelled:
         assert exc.value.__cause__ is cause
         assert window.blocked

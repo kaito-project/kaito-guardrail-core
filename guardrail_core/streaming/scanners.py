@@ -11,30 +11,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Adapt bounded, context-independent configured scanners to a streaming window."""
+"""Scanner/window adaptation extracted from RAGEngine at kaito dae02fe4d402."""
 
+import re
 from collections.abc import Sequence
 
 from guardrail_core.config import (
+    SCANNER_REGISTRY,
     BanSubstringsConfig,
-    InvisibleTextConfig,
     ParsedScannerConfig,
+    SecretsConfig,
     build_scanner,
 )
-from guardrail_core.scanning import scan_output
+from guardrail_core.scanning import Scanner, scan_output
 from guardrail_core.streaming.window import WindowScanResult
+
+DEFAULT_STREAMING_HOLDBACK_LEN = 256
+STREAMING_SCANNER_CAPABILITIES = {
+    "ban_substrings": frozenset({"block", "redact"}),
+    "invisible_text": frozenset({"block", "redact"}),
+    "secrets": frozenset({"block", "redact"}),
+    "sensitive": frozenset({"block", "redact"}),
+}
 
 
 class StreamingPolicyError(ValueError):
-    """A configuration cannot preserve scanner semantics in a finite window."""
+    """A configuration is unsupported by the shared streaming adapter."""
 
 
 class ScannerWindowAdapter:
-    """Run real scanners in order, applying each scanner's configured action.
+    """Clean pending text before checking blockers, matching RAGEngine.
 
-    Only substring matching without contains_all and character-local invisible
-    text scanning are supported. Other scanners need a richer streaming contract.
-    Use holdback_len when constructing StreamingBufferWindow.
+    Relative order is preserved within redactors and within blockers. Word
+    matching uses window boundary context; Secrets redaction is verified.
+    Use holdback_len when constructing StreamingBufferWindow. The retained
+    window preserves RAGEngine's bounded detection, not whole-response scanning.
     """
 
     def __init__(
@@ -48,36 +59,55 @@ class ScannerWindowAdapter:
         configs = tuple(scanner_configs)
         if not configs:
             raise StreamingPolicyError("scanner_configs must not be empty")
-        minimum_holdback = 0
+        if default_action not in ("block", "redact"):
+            raise StreamingPolicyError("default_action must be 'block' or 'redact'")
+        minimum_holdback = DEFAULT_STREAMING_HOLDBACK_LEN
         for index, parsed in enumerate(configs):
             config = parsed.config
-            if isinstance(config, BanSubstringsConfig):
-                if config.match_type != "str" or config.contains_all:
-                    raise StreamingPolicyError(
-                        f"scanner_configs[{index}]: streaming ban_substrings "
-                        "requires match_type='str' and contains_all=False"
-                    )
-                if any(not value.strip() for value in config.substrings):
-                    raise StreamingPolicyError(
-                        f"scanner_configs[{index}]: whitespace-only substrings "
-                        "cannot preserve scan_output's whitespace handling"
-                    )
-                if not config.case_sensitive and any(
-                    not value.isascii() for value in config.substrings
-                ):
-                    raise StreamingPolicyError(
-                        f"scanner_configs[{index}]: non-ASCII substrings require "
-                        "case_sensitive=True for context-independent matching"
-                    )
-                lengths = [
-                    len(value if config.case_sensitive else value.lower())
-                    for value in config.substrings
-                ]
-                minimum_holdback = max(minimum_holdback, max(lengths) - 1)
-            elif not isinstance(config, InvisibleTextConfig):
+            actions = STREAMING_SCANNER_CAPABILITIES.get(parsed.type)
+            if actions is None:
                 raise StreamingPolicyError(
-                    f"scanner_configs[{index}]: {parsed.type!r} has no bounded "
+                    f"scanner_configs[{index}]: {parsed.type!r} has no supported "
                     "streaming scanner contract"
+                )
+            if not isinstance(config, SCANNER_REGISTRY[parsed.type]):
+                raise StreamingPolicyError(
+                    f"scanner_configs[{index}]: configuration does not match "
+                    f"scanner type {parsed.type!r}"
+                )
+            action = (
+                default_action if parsed.action_on_hit is None else parsed.action_on_hit
+            )
+            if action not in actions:
+                raise StreamingPolicyError(
+                    f"scanner_configs[{index}]: action must be 'block' or 'redact'"
+                )
+            if isinstance(config, BanSubstringsConfig):
+                if config.contains_all:
+                    raise StreamingPolicyError(
+                        f"scanner_configs[{index}]: streaming ban_substrings requires "
+                        "contains_all=False; matches cannot accumulate across windows"
+                    )
+                minimum_holdback = max(
+                    minimum_holdback,
+                    max(
+                        (
+                            len(value)
+                            if config.match_type == "word"
+                            else len(value) - 1
+                            for value in config.substrings
+                        ),
+                        default=0,
+                    ),
+                )
+            if (
+                isinstance(config, SecretsConfig)
+                and action == "redact"
+                and config.redact_mode != "all"
+            ):
+                raise StreamingPolicyError(
+                    f"scanner_configs[{index}]: streaming Secrets redaction requires "
+                    "redact_mode='all'"
                 )
         if holdback_len is None:
             holdback_len = minimum_holdback
@@ -91,8 +121,11 @@ class ScannerWindowAdapter:
         self._prompt = prompt
         self._scanners = tuple(
             (
+                config.config,
                 build_scanner(config, default_action=default_action),
-                config.action_on_hit or default_action,
+                default_action
+                if config.action_on_hit is None
+                else config.action_on_hit,
             )
             for config in configs
         )
@@ -104,29 +137,124 @@ class ScannerWindowAdapter:
         flush: bool = False,
         preceding_char: str = "",
     ) -> WindowScanResult:
-        del flush, preceding_char
         output = text
-        for scanner, action in self._scanners:
-            scanned, validity, _ = scan_output((scanner,), self._prompt, output)
-            # scan_output intentionally skips whitespace-only output.
-            if validity and not all(validity.values()):
-                if action == "block":
+        for config, scanner, action in self._scanners:
+            if action != "redact":
+                continue
+            if isinstance(config, SecretsConfig):
+                redacted = _redact_secrets_and_verify(scanner, self._prompt, output)
+                if redacted is None:
                     return WindowScanResult(blocked=True)
+                output = redacted
+                continue
+            if isinstance(config, BanSubstringsConfig) and config.match_type == "word":
+                spans = _find_word_match_spans(
+                    output,
+                    config.substrings,
+                    case_sensitive=config.case_sensitive,
+                    preceding_char=preceding_char,
+                    flush=flush,
+                )
+                if spans:
+                    output = _redact_match_spans(output, spans)
+                continue
+            scanned, validity, _ = scan_output(
+                (scanner,), self._prompt, output, fail_fast=False
+            )
+            if not isinstance(scanned, str):
+                return WindowScanResult(blocked=True)
+            if not all(validity.values()):
                 if scanned == output:
-                    raise StreamingPolicyError(
-                        "redact scanner reported a finding without sanitizing output"
-                    )
-            if scanned is None:
-                raise StreamingPolicyError("scanner returned no output")
-            output = scanned
-        # Retained sanitized tails are scanned again; they must be a fixed point.
-        if output != text:
-            for scanner, action in self._scanners:
-                rescanned, validity, _ = scan_output((scanner,), self._prompt, output)
-                if validity and not all(validity.values()) and action == "block":
                     return WindowScanResult(blocked=True)
-                if rescanned != output or (validity and not all(validity.values())):
-                    raise StreamingPolicyError(
-                        "scanner redaction is not stable under repeated window scans"
-                    )
+                output = scanned
+
+        for config, scanner, action in self._scanners:
+            if action != "block":
+                continue
+            if isinstance(config, BanSubstringsConfig) and config.match_type == "word":
+                if _find_word_match_spans(
+                    output,
+                    config.substrings,
+                    case_sensitive=config.case_sensitive,
+                    preceding_char=preceding_char,
+                    flush=flush,
+                ):
+                    return WindowScanResult(blocked=True)
+                continue
+            scanned, validity, _ = scan_output(
+                (scanner,), self._prompt, output, fail_fast=False
+            )
+            if not isinstance(scanned, str) or not all(validity.values()):
+                return WindowScanResult(blocked=True)
+
         return WindowScanResult(sanitized_text=output if output != text else None)
+
+
+def _find_word_match_spans(
+    text: str,
+    substrings: list[str],
+    *,
+    case_sensitive: bool,
+    preceding_char: str,
+    flush: bool,
+) -> tuple[tuple[int, int], ...]:
+    """Use real left context and defer unconfirmed right boundaries until EOF."""
+    flags = 0 if case_sensitive else re.IGNORECASE
+    spans: list[tuple[int, int]] = []
+    for substring in substrings:
+        for match in re.finditer(re.escape(substring), text, flags):
+            start, end = match.span()
+            left_char = text[start - 1] if start > 0 else preceding_char
+            if _is_word_char(left_char) == _is_word_char(text[start]):
+                continue
+            if end == len(text) and not flush:
+                continue
+            right_char = text[end] if end < len(text) else ""
+            if _is_word_char(text[end - 1]) == _is_word_char(right_char):
+                continue
+            spans.append((start, end))
+    return _merge_match_spans(spans)
+
+
+def _is_word_char(value: str) -> bool:
+    return bool(value and re.fullmatch(r"\w", value))
+
+
+def _merge_match_spans(spans: list[tuple[int, int]]) -> tuple[tuple[int, int], ...]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _redact_match_spans(text: str, spans: tuple[tuple[int, int], ...]) -> str:
+    parts: list[str] = []
+    cursor = 0
+    for start, end in spans:
+        parts.extend((text[cursor:start], "[REDACTED]"))
+        cursor = end
+    parts.append(text[cursor:])
+    return "".join(parts)
+
+
+def _redact_secrets_and_verify(scanner: Scanner, prompt: str, text: str) -> str | None:
+    sanitized, validity, _ = scan_output((scanner,), prompt, text, fail_fast=False)
+    if not isinstance(sanitized, str):
+        return None
+    if all(validity.values()):
+        return text if sanitized == text else None
+    if sanitized == text or len(sanitized) > len(text):
+        return None
+    verified, verified_validity, _ = scan_output(
+        (scanner,), prompt, sanitized, fail_fast=False
+    )
+    if (
+        not isinstance(verified, str)
+        or verified != sanitized
+        or not all(verified_validity.values())
+    ):
+        return None
+    return sanitized

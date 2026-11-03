@@ -120,6 +120,7 @@ def test_sdist_contains_build_inputs_and_tests(distributions):
         "tests/streaming/test_sse.py",
         "tests/streaming/test_window.py",
         "tests/streaming/test_scanners.py",
+        "tests/streaming/test_scanner_parity.py",
         "guardrail_core/streaming/window.py",
         "guardrail_core/streaming/scanners.py",
         "guardrail_core/config.py",
