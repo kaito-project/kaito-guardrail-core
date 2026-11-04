@@ -88,23 +88,12 @@ to use the same configuration APIs.
 The 0.2.0 source and wheel can be tested before publishing; the version bump is
 not a release.
 
-## Configured streaming scanners (0.2.1, not yet released)
+## Streaming scanner adapter
 
-`guardrail_core.streaming.scanners.ScannerWindowAdapter` connects configured
-real scanners to `StreamingBufferWindow`. It uses `build_scanner()` and
-`scan_output()` and extracts the scanner/window adaptation from
-[RAGEngine at `dae02fe4d402`](https://github.com/kaito-project/kaito/blob/dae02fe4d40271c4634c690a609bc79432ad9c2f/presets/ragengine/streaming/guardrails.py).
-It preserves prompt forwarding and per-scanner `block`/`redact` actions,
-including repeated scanner types.
-
-All redactors run first, in their configured relative order. Blockers then check
-the final cleaned text, in their configured relative order, regardless of where
-they appeared among redactors in the configuration. This matches RAGEngine,
-not strict interleaving of block/redact actions. A redaction finding without a
-replacement or a malformed scanner result blocks release. Secrets redaction also
-requires a non-expanding replacement that passes a second scan unchanged;
-failed verification blocks release. Construction errors propagate unchanged;
-scanner exceptions are wrapped by the window in `WindowScanError`.
+`ScannerWindowAdapter` connects configured scanners to `StreamingBufferWindow`.
+Redactors run before blockers, preserving relative order within each group.
+It handles word-boundary context, derives the minimum holdback, and verifies
+Secrets redaction before release.
 
 ```python
 from guardrail_core.config import parse_scanner_config
@@ -115,50 +104,30 @@ scanner = ScannerWindowAdapter([
     parse_scanner_config({
         "type": "ban_substrings",
         "substrings": ["secret"],
-        "match_type": "word",
         "action": "redact",
     }),
 ])
 window = StreamingBufferWindow(scanner, holdback_len=scanner.holdback_len)
 ```
 
-The supported scanners match RAGEngine's streaming capability set:
-
-| Scanner | Streaming actions | Restrictions |
+| Scanner | Supported actions | Restrictions |
 | --- | --- | --- |
-| `ban_substrings` | `block`, `redact` | `word` (default) or `str`; `contains_all=False` |
-| `invisible_text` | `block`, `redact` | Shared Unicode cleanup |
-| `secrets` | `block`, `redact` | Redaction requires `redact_mode="all"`; block permits all configured modes |
-| `sensitive` | `block`, `redact` | Shared email, phone, credit-card, and IPv4 detectors |
+| `ban_substrings` | `block`, `redact` | `word` or `str`; `contains_all=False` |
+| `invisible_text` | `block`, `redact` | None |
+| `secrets` | `block`, `redact` | Redaction requires `redact_mode="all"` |
+| `sensitive` | `block`, `redact` | Email, phone, credit card, IPv4 |
 
-Unsupported scanners (`regex`, `json`, `reading_time`, `token_limit`), unsupported
-actions, `contains_all=True`, and non-`all` Secrets redaction raise indexed
-`StreamingPolicyError` before any scanner is built. They are never silently
-skipped. Buffered APIs continue to support all eight scanner types.
+Unsupported configurations raise `StreamingPolicyError` before construction.
+Construction errors propagate; scan exceptions are wrapped by the window in
+`WindowScanError`.
 
-Word matching uses Unicode word boundaries and configured case sensitivity.
-`preceding_char` supplies the last released character so a sliding window does
-not invent a left boundary. A match at the right edge is deferred until another
-character confirms the boundary or `flush=True` confirms normal end-of-stream.
-Overlapping word matches are merged before redaction. Non-word scanners retain
-the shared `scan_output()` whitespace-only-buffer behavior.
+Holdback defaults to at least 256 Unicode code points and increases for longer
+substrings. Smaller explicit bounds are rejected. Detection is limited to the
+retained window; arbitrary-length Secrets/Sensitive matches are not guaranteed.
 
-The adapter derives `holdback_len` using RAGEngine's default floor of 256 Unicode
-code points, increased to the longest configured substring for `word` matching
-or its length minus one for `str` matching. An explicit smaller holdback is
-rejected. Always use the adapter's `holdback_len` for the window and release
-only returned chunks.
-
-This preserves RAGEngine's **bounded-window** detection behavior, not a guarantee
-of equivalence to scanning the entire response: Secrets and Sensitive patterns
-can require more context than the retained window. Configure a larger holdback
-when needed; this extraction does not make arbitrary-length detection bounded.
-
-Flush only at validated normal completion; discard the window after parse
-failure or cancellation. Consumers still own SSE/DONE/EOF validation, transport,
-request lifecycle, upstream closure, refusal responses, metrics, and fail-open
-policy. Switching RAGEngine or gateway consumers is separate follow-up work.
-The 0.2.1 version bump prepares these APIs; it does not publish a release.
+Release only chunks returned by the window. Flush only after validated normal
+completion; discard the window on failure or cancellation. Consumers own stream
+lifecycle, transport, and refusal responses.
 
 ## Installation and development
 
