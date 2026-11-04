@@ -16,7 +16,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from guardrail_core.config import build_scanner, parse_scanner_config
+from guardrail_core.config import (
+    BanSubstringsConfig,
+    SensitiveConfig,
+    build_scanner,
+    parse_scanner_config,
+)
+from guardrail_core.native_scanners import BanSubstringsMatchType
 from guardrail_core.scanning import ScanResult
 from guardrail_core.streaming import scanners as scanner_module
 from guardrail_core.streaming.scanners import ScannerWindowAdapter, StreamingPolicyError
@@ -106,6 +112,71 @@ def test_duplicate_scanner_types_keep_per_scanner_actions():
         sanitized_text="[REDACTED] safe"
     )
     assert scanner.scan("secret token") == WindowScanResult(blocked=True)
+
+
+@pytest.mark.parametrize("action", ["block", "redact"])
+def test_original_config_mutation_does_not_change_scanning_or_holdback(action):
+    substring = "x" * 300
+    parsed = parse_scanner_config({**ban(action, substring), "match_type": "word"})
+    config = parsed.config
+    assert isinstance(config, BanSubstringsConfig)
+    configs = [parsed]
+    scanner = ScannerWindowAdapter(configs)
+
+    config.substrings[:] = ["changed", "y" * 400]
+    config.case_sensitive = True
+    parsed.action_on_hit = "redact" if action == "block" else "block"
+    parsed.config = SensitiveConfig(detectors=["email"])
+    configs.clear()
+
+    assert scanner.holdback_len == 300
+    assert scanner.scan("X" * 300, flush=True) == (
+        WindowScanResult(blocked=True)
+        if action == "block"
+        else WindowScanResult(sanitized_text="[REDACTED]")
+    )
+    assert scanner.scan("changed", flush=True) == WindowScanResult()
+    assert scanner.scan("y" * 400, flush=True) == WindowScanResult()
+
+
+def test_original_match_type_mutation_does_not_change_word_boundaries():
+    parsed = parse_scanner_config({**ban(), "match_type": "word"})
+    assert isinstance(parsed.config, BanSubstringsConfig)
+    scanner = ScannerWindowAdapter([parsed])
+    parsed.config.match_type = BanSubstringsMatchType.STR
+
+    assert scanner.scan("secret") == WindowScanResult()
+    assert scanner.scan("secretish", flush=True) == WindowScanResult()
+    assert scanner.scan("secret", flush=True) == WindowScanResult(blocked=True)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        ban(),
+        {"type": "invisible_text"},
+        {"type": "secrets"},
+        {"type": "sensitive", "detectors": ["email"]},
+    ],
+)
+def test_scanner_construction_receives_independent_config_snapshot(raw, monkeypatch):
+    builder = Mock(wraps=build_scanner)
+    monkeypatch.setattr(scanner_module, "build_scanner", builder)
+    original = parse_scanner_config(raw)
+    ScannerWindowAdapter([original])
+    snapshot = builder.call_args.args[0]
+
+    assert snapshot == original
+    assert snapshot is not original
+    assert snapshot.config is not original.config
+    if isinstance(original.config, BanSubstringsConfig):
+        assert snapshot.config.substrings is not original.config.substrings
+        original.config.substrings.append("changed")
+        assert snapshot.config.substrings == ["secret"]
+    elif isinstance(original.config, SensitiveConfig):
+        assert snapshot.config.detectors is not original.config.detectors
+        original.config.detectors.append("phone")
+        assert snapshot.config.detectors == ["email"]
 
 
 @pytest.mark.parametrize(

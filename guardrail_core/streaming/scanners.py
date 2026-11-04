@@ -15,6 +15,7 @@
 
 import re
 from collections.abc import Sequence
+from copy import deepcopy
 
 from guardrail_core.config import (
     SCANNER_REGISTRY,
@@ -56,7 +57,7 @@ class ScannerWindowAdapter:
         default_action: str = "block",
         holdback_len: int | None = None,
     ) -> None:
-        configs = tuple(scanner_configs)
+        configs = deepcopy(tuple(scanner_configs))
         if not configs:
             raise StreamingPolicyError("scanner_configs must not be empty")
         if default_action not in ("block", "redact"):

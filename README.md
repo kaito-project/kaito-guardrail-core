@@ -91,6 +91,8 @@ to use the same configuration APIs.
 Redactors run before blockers, preserving relative order within each group.
 It handles word-boundary context, derives the minimum holdback, and verifies
 Secrets redaction before release.
+Configurations, including nested lists, are copied at construction; later caller
+changes do not affect the adapter.
 
 ```python
 from guardrail_core.config import parse_scanner_config
