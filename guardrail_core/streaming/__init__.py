@@ -11,4 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Dependency-free SSE framing and OpenAI chat streaming utilities."""
+"""Streaming utilities for SSE framing, OpenAI chat chunks, and scanner adaptation.
+
+SSE/OpenAI utilities use only the standard library. The scanner adapter requires
+the package's scanner dependencies.
+"""

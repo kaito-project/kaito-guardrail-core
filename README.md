@@ -327,7 +327,7 @@ Confirm maintainer access and configure:
 Trusted Publishers and GitHub environments from `kaito-project/kaito` do not
 transfer automatically. Configure them for this repository before running a
 release, and coordinate with KAITO maintainers so only one repository publishes
-the package. Version `0.1.1` is already published; do not republish it.
+the package. Never republish an existing version.
 
 ### Release workflow
 
