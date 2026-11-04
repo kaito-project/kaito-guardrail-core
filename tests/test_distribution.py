@@ -129,8 +129,12 @@ def test_sdist_contains_build_inputs_and_tests(distributions):
         "tests/test_config.py",
         "tests/test_distribution.py",
     } <= names
-    assert not any(
-        name.startswith(("ragengine/", "presets/", "build/")) for name in names
+    assert all(
+        "/" not in name
+        or name.startswith(
+            ("guardrail_core/", "tests/", "kaito_guardrail_core.egg-info/")
+        )
+        for name in names
     )
 
 

@@ -277,8 +277,8 @@ After a framing error or `finish()`, the framer is unusable; further calls raise
 
 ## OpenAI parsing contract
 
-`parse_openai_chat_sse_event(event)` returns `OpenAIChatChunkParseResult`, retaining
-RAGEngine's status names and convenience fields:
+`parse_openai_chat_sse_event(event)` returns `OpenAIChatChunkParseResult` with the
+following statuses and convenience fields:
 
 | Input | `OpenAIChatChunkParseStatus` |
 | --- | --- |
@@ -302,7 +302,7 @@ and finish reasons, not the filtered `contents`/`finish_reasons` lists.
 ## SSE builders
 
 The functions in `guardrail_core.streaming.openai` return UTF-8-encodable strings
-with LF delimiters, matching RAGEngine:
+with LF delimiters:
 
 - `build_openai_chat_delta_sse_chunk(content, *, choice_index=0)`
 - `build_openai_chat_finish_reason_sse_chunk(*, finish_reason="content_filter", choice_index=0)`

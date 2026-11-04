@@ -349,15 +349,17 @@ def test_scanner_cancellation_is_not_converted_into_a_scan_error():
         window.feed("text")
 
 
-def test_shared_window_import_does_not_load_scanner_or_framework_dependencies():
+def test_shared_window_import_only_loads_package_and_standard_library():
     subprocess.run(
         [
             sys.executable,
             "-I",
             "-c",
-            "import guardrail_core.streaming.window; import sys; "
-            "assert not {'fastapi', 'ragengine', 'envoy', 'detect_secrets', "
-            "'tiktoken', 'regex', 'json_repair'} & sys.modules.keys()",
+            "import sys; before = set(sys.modules); "
+            "import guardrail_core.streaming.window; "
+            "assert all(name.split('.', 1)[0] in "
+            "sys.stdlib_module_names | {'guardrail_core'} "
+            "for name in sys.modules.keys() - before)",
         ],
         check=True,
         capture_output=True,
