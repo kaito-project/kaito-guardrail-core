@@ -85,16 +85,58 @@ Configuration and construction stay in `guardrail_core.config`; sensitive-data
 detection and redaction live in an internal scanner module. Consumers continue
 to use the same configuration APIs.
 
-The 0.2.0 source and wheel can be tested before publishing; the version bump is
-not a release.
+## Streaming scanner adapter
+
+`ScannerWindowAdapter` connects configured scanners to `StreamingBufferWindow`.
+Redactors run before blockers, preserving relative order within each group.
+It handles word-boundary context, derives the minimum holdback, and verifies
+Secrets redaction before release.
+Configurations, including nested lists, are copied at construction; later caller
+changes do not affect the adapter.
+
+```python
+from guardrail_core.config import parse_scanner_config
+from guardrail_core.streaming.scanners import ScannerWindowAdapter
+from guardrail_core.streaming.window import StreamingBufferWindow
+
+scanner = ScannerWindowAdapter([
+    parse_scanner_config({
+        "type": "ban_substrings",
+        "substrings": ["secret"],
+        "action": "redact",
+    }),
+])
+window = StreamingBufferWindow(scanner, holdback_len=scanner.holdback_len)
+```
+
+| Scanner | Supported actions | Restrictions |
+| --- | --- | --- |
+| `ban_substrings` | `block`, `redact` | `word` or `str`; `contains_all=False` |
+| `invisible_text` | `block`, `redact` | None |
+| `secrets` | `block`, `redact` | Redaction requires `redact_mode="all"` |
+| `sensitive` | `block`, `redact` | Email, phone, credit card, IPv4 |
+
+Unsupported configurations raise `StreamingPolicyError` before construction.
+Construction errors propagate; scan exceptions are wrapped by the window in
+`WindowScanError`.
+
+Holdback defaults to at least 256 Unicode code points and increases for longer
+substrings. Smaller explicit bounds are rejected. Detection is limited to the
+retained window; arbitrary-length Secrets/Sensitive matches are not guaranteed.
+
+Release only chunks returned by the window. Flush only after validated normal
+completion; discard the window on failure or cancellation. Consumers own stream
+lifecycle, transport, and refusal responses.
 
 ## Installation and development
 
 This repository starts from
 [`kaito-project/kaito` main at `74d6eeeefe314e91f5c636de10c5b5c21cb21b64`](https://github.com/kaito-project/kaito/tree/74d6eeeefe314e91f5c636de10c5b5c21cb21b64/guardrail_core).
 The original source remains in KAITO during the transition. The distribution
-name and import paths are unchanged. Version 0.2.0 prepares the shared scanner
-configuration APIs; no package is published by this change.
+name and import paths are unchanged. Version 0.2.0 introduced the shared scanner
+configuration APIs; 0.2.1 extracts the shared streaming scanner adapter. No package is
+published by this change. After merge and publication of 0.2.1, production-stack
+should pin `kaito-guardrail-core==0.2.1`.
 
 Install the published package:
 
