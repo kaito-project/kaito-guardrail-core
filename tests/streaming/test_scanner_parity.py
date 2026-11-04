@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Scanner/window scenarios from RAGEngine at kaito main dae02fe4d402.
+"""Scanner/window regression scenarios recorded at kaito main dae02fe4d402.
 
 Transport framing, refusal responses, and stream lifecycle remain consumer tests.
 """

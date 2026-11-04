@@ -36,7 +36,7 @@ SCANNER_CASES = [
 @pytest.mark.parametrize("raw", SCANNER_CASES)
 @pytest.mark.parametrize("action", ["block", "redact"])
 def test_shared_configs_preserve_ragengine_scanner_behavior(raw, action):
-    """Keep recorded RAGEngine results independent of the original source tree."""
+    """Keep recorded scanner results independent of the original source tree."""
     parsed = parse_scanner_config(raw, default_action=action)
     shared = build_scanner(parsed)
     texts = ("safe output", "a secret", "contact alice@example.com", '{"ok": 1}')

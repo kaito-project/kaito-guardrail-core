@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared scanner configuration, extracted from RAGEngine's scanner schemas."""
+"""Shared scanner configuration schemas and construction."""
 
 import re
 from collections.abc import Mapping
