@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Scanner/window adaptation extracted from RAGEngine at kaito dae02fe4d402."""
+"""Adapt configured scanners to a streaming window."""
 
 import re
 from collections.abc import Sequence
@@ -41,12 +41,12 @@ class StreamingPolicyError(ValueError):
 
 
 class ScannerWindowAdapter:
-    """Clean pending text before checking blockers, matching RAGEngine.
+    """Clean pending text before checking blockers.
 
     Relative order is preserved within redactors and within blockers. Word
     matching uses window boundary context; Secrets redaction is verified.
     Use holdback_len when constructing StreamingBufferWindow. The retained
-    window preserves RAGEngine's bounded detection, not whole-response scanning.
+    window provides bounded detection, not whole-response scanning.
     """
 
     def __init__(

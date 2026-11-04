@@ -35,8 +35,8 @@ SCANNER_CASES = [
 
 @pytest.mark.parametrize("raw", SCANNER_CASES)
 @pytest.mark.parametrize("action", ["block", "redact"])
-def test_shared_configs_preserve_ragengine_scanner_behavior(raw, action):
-    """Keep recorded RAGEngine results independent of the original source tree."""
+def test_shared_configs_preserve_scanner_behavior(raw, action):
+    """Keep recorded scanner results independent of the original source tree."""
     parsed = parse_scanner_config(raw, default_action=action)
     shared = build_scanner(parsed)
     texts = ("safe output", "a secret", "contact alice@example.com", '{"ok": 1}')
@@ -53,7 +53,7 @@ def test_shared_configs_preserve_ragengine_scanner_behavior(raw, action):
 
 
 @pytest.mark.parametrize("raw", SCANNER_CASES)
-def test_all_shared_scanners_build_without_ragengine(raw):
+def test_all_shared_scanners_build_independently(raw):
     scanner = build_scanner(parse_scanner_config(raw))
     assert callable(scanner.scan)
 

@@ -130,13 +130,8 @@ lifecycle, transport, and refusal responses.
 
 ## Installation and development
 
-This repository starts from
+This repository originated from
 [`kaito-project/kaito` main at `74d6eeeefe314e91f5c636de10c5b5c21cb21b64`](https://github.com/kaito-project/kaito/tree/74d6eeeefe314e91f5c636de10c5b5c21cb21b64/guardrail_core).
-The original source remains in KAITO during the transition. The distribution
-name and import paths are unchanged. Version 0.2.0 introduced the shared scanner
-configuration APIs; 0.2.1 extracts the shared streaming scanner adapter. No package is
-published by this change. After merge and publication of 0.2.1, production-stack
-should pin `kaito-guardrail-core==0.2.1`.
 
 Install the published package:
 
@@ -277,8 +272,8 @@ After a framing error or `finish()`, the framer is unusable; further calls raise
 
 ## OpenAI parsing contract
 
-`parse_openai_chat_sse_event(event)` returns `OpenAIChatChunkParseResult`, retaining
-RAGEngine's status names and convenience fields:
+`parse_openai_chat_sse_event(event)` returns `OpenAIChatChunkParseResult` with the
+following statuses and convenience fields:
 
 | Input | `OpenAIChatChunkParseStatus` |
 | --- | --- |
@@ -302,7 +297,7 @@ and finish reasons, not the filtered `contents`/`finish_reasons` lists.
 ## SSE builders
 
 The functions in `guardrail_core.streaming.openai` return UTF-8-encodable strings
-with LF delimiters, matching RAGEngine:
+with LF delimiters:
 
 - `build_openai_chat_delta_sse_chunk(content, *, choice_index=0)`
 - `build_openai_chat_finish_reason_sse_chunk(*, finish_reason="content_filter", choice_index=0)`
@@ -332,7 +327,7 @@ Confirm maintainer access and configure:
 Trusted Publishers and GitHub environments from `kaito-project/kaito` do not
 transfer automatically. Configure them for this repository before running a
 release, and coordinate with KAITO maintainers so only one repository publishes
-the package. Version `0.1.1` is already published; do not republish it.
+the package. Never republish an existing version.
 
 ### Release workflow
 
