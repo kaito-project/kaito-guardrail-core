@@ -130,13 +130,8 @@ lifecycle, transport, and refusal responses.
 
 ## Installation and development
 
-This repository starts from
+This repository originated from
 [`kaito-project/kaito` main at `74d6eeeefe314e91f5c636de10c5b5c21cb21b64`](https://github.com/kaito-project/kaito/tree/74d6eeeefe314e91f5c636de10c5b5c21cb21b64/guardrail_core).
-The original source remains in KAITO during the transition. The distribution
-name and import paths are unchanged. Version 0.2.0 introduced the shared scanner
-configuration APIs; 0.2.1 extracts the shared streaming scanner adapter. No package is
-published by this change. After merge and publication of 0.2.1, production-stack
-should pin `kaito-guardrail-core==0.2.1`.
 
 Install the published package:
 
