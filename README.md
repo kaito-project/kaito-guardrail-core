@@ -85,9 +85,6 @@ Configuration and construction stay in `guardrail_core.config`; sensitive-data
 detection and redaction live in an internal scanner module. Consumers continue
 to use the same configuration APIs.
 
-The 0.2.0 source and wheel can be tested before publishing; the version bump is
-not a release.
-
 ## Streaming scanner adapter
 
 `ScannerWindowAdapter` connects configured scanners to `StreamingBufferWindow`.
