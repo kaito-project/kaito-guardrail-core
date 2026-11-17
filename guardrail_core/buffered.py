@@ -11,7 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Policy decisions for complete output text, independent of transport."""
+"""Apply a guardrail policy to complete output text.
+
+Return a decision to allow the original text, redact it, or block it.
+The caller handles delivery.
+"""
 
 from collections.abc import Sequence
 from typing import NamedTuple
