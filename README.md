@@ -73,7 +73,8 @@ choose scanners appropriate to the content (for example, `json` expects JSON).
 Entries use a flattened mapping with `type`, optional `action` (`block` or
 `redact`), and scanner-specific fields. The default action is `block`. Type and
 field names accept snake_case, camelCase, and hyphenated spelling. Scanner order
-and policy-level actions remain the caller's responsibility.
+and policy-level actions remain the caller's responsibility when using these
+low-level construction APIs directly.
 
 The strict parser rejects unknown scanners, unknown or duplicate normalized
 fields, invalid actions, and malformed scanner settings with `ValueError`.
@@ -84,6 +85,46 @@ It does not log and skip invalid entries. Construction exceptions from
 Configuration and construction stay in `guardrail_core.config`; sensitive-data
 detection and redaction live in an internal scanner module. Consumers continue
 to use the same configuration APIs.
+
+## Complete-output policy scanning (unreleased)
+
+`guardrail_core.buffered.scan_policy_output()` owns complete-text policy
+decisions, independently of JSON framing or gateway transport:
+
+```python
+from guardrail_core.buffered import scan_policy_output
+from guardrail_core.config import parse_scanner_config
+
+result = scan_policy_output(
+    [parse_scanner_config({
+        "type": "ban_substrings",
+        "substrings": ["secret"],
+        "action": "redact",
+    })],
+    prompt="",
+    output="a secret",
+)
+assert not result.blocked
+assert result.output == "a [REDACTED]"
+```
+
+The function builds fresh scanners on every call, then executes them in
+configured order, honoring per-scanner action overrides and `default_action`.
+Unlike the streaming adapter, it does not reorder redactors before blockers or
+restrict policies to streaming-capable scanners. Each scanner is evaluated
+separately so repeated scanner types cannot hide an earlier block.
+
+`PolicyScanResult.output` is the complete allowed text, including an empty
+sanitized string. A blocked result has `blocked=True` and `output=None`; never
+release the original output after a block. Redaction hits with unchanged or
+non-string output block. Secrets redaction shares the streaming adapter's
+verification: sanitization must not grow the text, and a second scan must pass
+without changing it. Gateway consumers must not reproduce that verification.
+
+Empty configurations, invalid actions, and non-string input are rejected.
+Scanner construction and execution errors propagate; consumers own transport
+error reporting and fail-closed handling. The low-level `scan_output()` API and
+its existing tuple contract are unchanged.
 
 ## Streaming scanner adapter
 

@@ -59,3 +59,23 @@ def scan_output(
             break
 
     return sanitized_output, results_valid, results_score
+
+
+def _redact_secrets_and_verify(scanner: Scanner, prompt: str, text: str) -> str | None:
+    sanitized, validity, _ = scan_output((scanner,), prompt, text, fail_fast=False)
+    if not isinstance(sanitized, str):
+        return None
+    if all(validity.values()):
+        return text if sanitized == text else None
+    if sanitized == text or len(sanitized) > len(text):
+        return None
+    verified, verified_validity, _ = scan_output(
+        (scanner,), prompt, sanitized, fail_fast=False
+    )
+    if (
+        not isinstance(verified, str)
+        or verified != sanitized
+        or not all(verified_validity.values())
+    ):
+        return None
+    return sanitized
