@@ -24,7 +24,7 @@ from guardrail_core.config import (
     SecretsConfig,
     build_scanner,
 )
-from guardrail_core.scanning import Scanner, scan_output
+from guardrail_core.scanning import _redact_secrets_and_verify, scan_output
 from guardrail_core.streaming.window import WindowScanResult
 
 DEFAULT_STREAMING_HOLDBACK_LEN = 256
@@ -239,23 +239,3 @@ def _redact_match_spans(text: str, spans: tuple[tuple[int, int], ...]) -> str:
         cursor = end
     parts.append(text[cursor:])
     return "".join(parts)
-
-
-def _redact_secrets_and_verify(scanner: Scanner, prompt: str, text: str) -> str | None:
-    sanitized, validity, _ = scan_output((scanner,), prompt, text, fail_fast=False)
-    if not isinstance(sanitized, str):
-        return None
-    if all(validity.values()):
-        return text if sanitized == text else None
-    if sanitized == text or len(sanitized) > len(text):
-        return None
-    verified, verified_validity, _ = scan_output(
-        (scanner,), prompt, sanitized, fail_fast=False
-    )
-    if (
-        not isinstance(verified, str)
-        or verified != sanitized
-        or not all(verified_validity.values())
-    ):
-        return None
-    return sanitized
